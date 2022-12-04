@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "MCWin10VptrFromBDS": {
+      "commandName": "Project"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "发布程序调试": {
+      "commandName": "Executable",
+      "executablePath": "E:\\小桌面\\C#\\MC\\MCWin10VptrFromBDS\\MCWin10VptrFromBDS\\bin\\Release\\net6.0\\publish\\win-x64\\MCWin10VptrFromBDS.exe"
+    }
+  }
+}

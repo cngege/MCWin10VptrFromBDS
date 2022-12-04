@@ -5,9 +5,13 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="LevelDB.Net">
+      <HintPath>..\..\..\测试\packages\LevelDB.Net.1.2.1\lib\net40\LevelDB.Net.dll</HintPath>
+    </Reference>
     <Reference Include="Tools">
       <HintPath>..\..\..\Tools\Tools\bin\Release\Tools.dll</HintPath>
     </Reference>

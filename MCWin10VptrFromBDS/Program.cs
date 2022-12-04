@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using Tools.Address;
+using LevelDB;
 
 // See https://aka.ms/new-console-template for more information
 Console.Title = "你好 ~  搜索Minecraft Win10 版和BDS中类的虚表，以制作MCWin10Mod!";
@@ -24,9 +25,12 @@ int MCWin10Pid = 0;
 
 #if DEBUG
 string? BDSSymPath = "C:\\Users\\CNGEGE\\Desktop\\MCBDS插件开发助手\\bedrock_server的PDB符号1.19.50.02.txt";
+string? LevelDBPath = "C:\\Users\\CNGEGE\\Desktop\\SymDB";
 #else
 string? BDSSymPath = null;
+string? LevelDBPath = null;
 #endif
+
 
 
 //提示输入
@@ -73,6 +77,7 @@ while (true)
         Console.WriteLine("BDSPid = {0}", BDSPid);
         Console.WriteLine("MCWin10Pid = {0}", MCWin10Pid);
         Console.WriteLine("BDSSymPath = {0}", BDSSymPath);
+        Console.WriteLine("LevelDBPath = {0}", LevelDBPath);
 
     }
     if (menu_select == 2)
@@ -86,7 +91,75 @@ while (true)
         if (File.Exists(Path))
         {
             BDSSymPath = Path;
-            Console.WriteLine("成功");
+            //Console.WriteLine("成功");
+            if(LevelDBPath != null)
+            {
+                string[] bdsym = Array.Empty<string>();
+                Console.WriteLine("开始生成数据库 => {0}", LevelDBPath);
+                var db = DB.Open(LevelDBPath, new Options { CreateIfMissing = true });
+                Console.WriteLine("读取&分割符号文件中……");
+                bdsym = File.ReadAllLines(BDSSymPath);
+
+                var WOptions = new WriteOptions { Sync = false };
+                var errorcount = 0;
+                Dictionary<string, string> syms = new();
+
+                for (int i=0; i < bdsym.Length; i++)
+                {
+                    if (bdsym[i].StartsWith("0x"))
+                    {
+                        var key = bdsym[i][..10];
+                        var WriteVal = key + bdsym[i - 1].Remove(0, 7) + "\n";
+                        try
+                        {
+                            Console.WriteLine("正在处理第 {0} 行", i.ToString());
+                            //读取key
+                            //优化 将有多处符号的地址存在内存中 最后统一写入
+                            var sucess = db.TryGet(ReadOptions.Default, key, out Slice val);
+                            if (sucess)
+                            {
+                                //WriteVal = val.ToString() + WriteVal;
+                                //db.Put(WOptions, key, WriteVal);
+                                if (syms.ContainsKey(key))
+                                {
+                                    syms[key] = syms.GetValueOrDefault(key) + WriteVal;
+                                }
+                                else
+                                {
+                                    syms.Add(key, val.ToString() + WriteVal);
+                                }
+                            }
+                            else
+                            {
+                                db.Put(WOptions, key, WriteVal);
+                            }
+                        }
+                        catch
+                        {
+                            errorcount++;
+                        }
+
+                    }
+                }
+                bdsym.Clone();
+                Console.WriteLine("第一轮写入结束,现在处理冗余符号");
+                foreach(KeyValuePair<string,string> kv in syms){
+                    try
+                    {
+                        db.Put(WOptions, kv.Key, kv.Value);
+                    }
+                    catch
+                    {
+                        errorcount++;
+                    }
+                    
+                }
+
+                Console.WriteLine("结束 此次处理共发生了 {0} 处错误",errorcount);
+                db.Dispose();
+                syms.Clear();
+                GC.Collect();
+            }
         }
         else
         {
@@ -95,6 +168,20 @@ while (true)
 
     }
     if (menu_select == 3)
+    {
+        if (LevelDBPath != null)
+        {
+            Console.WriteLine("old LevelDBPath = {0}", LevelDBPath);
+        }
+        Console.WriteLine("请设置SymDB的数据库位置: ");
+        var path = Console.ReadLine();
+        if (path != null && path!= string.Empty)
+        {
+            LevelDBPath = path;
+            Console.WriteLine("完成.");
+        }
+    }
+    if (menu_select == 4)
     {
         Console.WriteLine("请设置 {0} 中你要查询虚表的类的地址，或虚表地址(16进制)", "MCWin10");
         var addr_str = Console.ReadLine();
@@ -125,7 +212,7 @@ while (true)
         Console.WriteLine("{0} [{1}] => [{2}]", "MCWin10ClassAddress", oldaddr.ToString("X16"), MCWin10ClassVTAddress.ToString("X16"));
         continue;
     }
-    if (menu_select == 4)
+    if (menu_select == 5)
     {
         Console.WriteLine("请设置 {0} 中你要查询虚表的类的地址，或虚表地址(16进制)", "BDS");
         var addr_str = Console.ReadLine();
@@ -156,15 +243,15 @@ while (true)
         Console.WriteLine("{0} [{1}] => [{2}]", "BDSClassAddress", oldaddr.ToString("X16"), BDSClassVTAddress.ToString("X16"));
         continue;
     }
-    if (menu_select == 5)
+    if (menu_select == 6)
     {
         MCWin10ClassVTAddress = IntPtr.Zero;
     }
-    if (menu_select == 6)
+    if (menu_select == 7)
     {
         BDSClassVTAddress = IntPtr.Zero;
     }
-    if (menu_select == 7)
+    if (menu_select == 8)
     {
         if (MCWin10ClassVTAddress == IntPtr.Zero)
         {
@@ -192,7 +279,7 @@ while (true)
             }
         }
     }
-    if (menu_select == 8)
+    if (menu_select == 9)
     {
         if (BDSClassVTAddress == IntPtr.Zero)
         {
@@ -220,7 +307,7 @@ while (true)
         }
 
     }
-    if (menu_select == 9)
+    if (menu_select == 10)
     {
         var MCWin10Vptr = IntPtr.Zero;
         if (MCWin10Pid != 0 && MCWin10ClassVTAddress != IntPtr.Zero)
@@ -280,11 +367,11 @@ while (true)
         Console.ReadLine();
     }
 
-    if (menu_select == 10)
+    if (menu_select == 11)
     {
         string filetext = "";
-        bool hasbdsym = false;
-        string[] bdsym = Array.Empty<string>();
+        //bool hasbdsym = false;
+        //string[] bdsymdb = Array.Empty<string>();
         
 
         var MCWin10Vptr = IntPtr.Zero;
@@ -305,12 +392,13 @@ while (true)
         }
 
         //读取符号文件
-        if (BDSVptr != IntPtr.Zero && File.Exists(BDSSymPath))
-        {
-            Console.WriteLine("读取&分割符号文件中……");
-            bdsym = File.ReadAllLines(BDSSymPath);
-            hasbdsym = true;
-        }
+        //if (BDSVptr != IntPtr.Zero/* && File.Exists(BDSSymPath)*/)
+        //{
+        //    Console.WriteLine("读取&分割符号文件中……");
+        //    bdsym = File.ReadAllLines(BDSSymPath);
+        //    hasbdsym = true;
+        //}
+        var bdsymdb = DB.Open(LevelDBPath, Options.Default);
 
         for (int i = 0; i < maxcount; i++)
         {
@@ -320,7 +408,7 @@ while (true)
 #if DEBUG
             if (i >= 100)
             {
-                break;
+                //break;
             }
 #endif
 
@@ -339,16 +427,18 @@ while (true)
                 string offsize = (BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64()).ToString("X8");
                 filetext += String.Format("{0} 虚函数: {1},偏移: {2}\n", "BDS", BDScallAddress.ToString("X16"), BDSMoudle + "+" + offsize);
 
-                if (hasbdsym)
+                if (bdsymdb.TryGet(ReadOptions.Default,"0x"+ offsize, out Slice val))
                 {
-                    for (int ii = 0; ii < bdsym.Length; ii++)
-                    {
-                        if (bdsym[ii].StartsWith("0x" + offsize))
-                        {
-                            filetext += bdsym[ii - 1] + "\n";
-                            filetext += bdsym[ii] + "\n";
-                        }
-                    }
+                    //for (int ii = 0; ii < bdsym.Length; ii++)
+                    //{
+                    //    if (bdsym[ii].StartsWith("0x" + offsize))
+                    //    {
+                    //        filetext += bdsym[ii - 1] + "\n";
+                    //        filetext += bdsym[ii] + "\n";
+                    //    }
+                    //}
+
+                    filetext += val.ToString();
 
                     if (filetext.Length > 10000)
                     {
@@ -365,7 +455,7 @@ while (true)
                 break;
             }
         }
-
+        bdsymdb.Dispose();
         File.AppendAllText(String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")), filetext);
         Console.WriteLine("文件保存完成：{0}",String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")));
 
@@ -385,22 +475,23 @@ int? Menu()
     Console.WriteLine("Menu");
     Console.WriteLine("0. 退出");
     Console.WriteLine("1. Print Info");
-    Console.WriteLine("2. 设置BDS符号文件位置");
-    Console.WriteLine("3. 设置 MCWin10 中要查询虚表的类地址/虚表地址（比如Player类");
-    Console.WriteLine("4. 设置 BDS     中要查询虚表的虚表地址（比如Player类");
-    Console.WriteLine("5. 清除 MCWin10 中要查询虚表的类地址/虚表地址");
-    Console.WriteLine("6. 清除 BDS     中要查询虚表的虚表地址");
-    Console.WriteLine("7. 在Win10版中查询方法地址在虚表中的位置");
-    Console.WriteLine("8. 在BDS版中查询方法地址在虚表中的位置");
-    Console.WriteLine("9. 根据类地址依次获取对应虚函数的地址");
-    Console.WriteLine("10. 根据类地址依次获取对应虚函数的地址保存在桌面文件中");
+    Console.WriteLine("2. 选择BDS符号文件位置，并生成SymDB数据库,请先设置SymDB数据库位置");
+    Console.WriteLine("3. 选择SymDB数据库位置(不包含\\)");
+    Console.WriteLine("4. 设置 MCWin10 中要查询虚表的类地址/虚表地址（比如Player类");
+    Console.WriteLine("5. 设置 BDS     中要查询虚表的虚表地址（比如Player类");
+    Console.WriteLine("6. 清除 MCWin10 中要查询虚表的类地址/虚表地址");
+    Console.WriteLine("7. 清除 BDS     中要查询虚表的虚表地址");
+    Console.WriteLine("8. 在Win10版中查询方法地址在虚表中的位置");
+    Console.WriteLine("9. 在BDS版中查询方法地址在虚表中的位置");
+    Console.WriteLine("10. 根据类地址依次获取对应虚函数的地址");
+    Console.WriteLine("11. 根据类地址依次获取对应虚函数的地址保存在桌面文件中");
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.Write("输入一个序号选择你要使用的功能 > ");
     Console.ForegroundColor = ConsoleColor.Green;
 
     Console.ForegroundColor = consoleColor;
     var ret = StringToIntOrZero(Console.ReadLine());
-    if (ret > 10)
+    if (ret > 11)
     {
         ret = 0;
     }
