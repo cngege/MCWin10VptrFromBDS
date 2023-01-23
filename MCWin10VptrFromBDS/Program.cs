@@ -449,8 +449,15 @@ while (true)
 
             }
             filetext += String.Format("\n");
-
+            if (MCWin10ClassVTAddress == IntPtr.Zero || BDSClassVTAddress == IntPtr.Zero)
+            {
+                break;
+            }
             if (MCWin10callAddress.ToInt64() % 16 != 0 || BDScallAddress.ToInt64() % 16 != 0)
+            {
+                break;
+            }
+            if (MCWin10callAddress.ToInt64() - MCWin10MoudleBaseAddress.ToInt64() > 0xF0000000 || BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64() > 0xF0000000)
             {
                 break;
             }
