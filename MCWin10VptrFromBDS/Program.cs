@@ -474,7 +474,7 @@ while (true)
             {
                 break;
             }
-            if(MCWin10ClassVTAddress != IntPtr.Zero)
+            if(MCWin10Vptr != IntPtr.Zero)
             {
                 if(MCWin10callAddress.ToInt64() % 16 != 0)
                     break;
@@ -482,7 +482,7 @@ while (true)
                     break;
             }
 
-            if (BDSClassVTAddress != IntPtr.Zero)
+            if (BDSVptr != IntPtr.Zero)
             {
                 if(BDScallAddress.ToInt64() % 16 != 0)
                     break;
@@ -495,20 +495,137 @@ while (true)
         Console.WriteLine("文件保存完成：{0}",String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")));
 
     }
-    if (menu_select == 12)
+    if (menu_select == 12)          // 生成预设的虚表文件
     {
-        Console.WriteLine("DEBUG ");
+        string[,] preset = new string[,] {
+            { "const Mob::`vftable'", "MobSymVtr" },
+            { "const ItemActor::`vftable'", "ItemActorSymVtr" } ,
+            { "const Actor::`vftable'", "ActorSymVtr" } ,
+            { "const SimulatedPlayer::`vftable'", "SimulatedPlayerSymVtr" } ,
+            { "const ServerPlayer::`vftable'", "ServerPlayerSymVtr" } ,
+            { "const Player::`vftable'", "PlayerSymVtr" } ,
+            { "const FishingHook::`vftable'", "FishingHookSymVtr" } ,
+            { "const GameMode::`vftable'", "GameModeSymVtr" } ,
+            { "const Item::`vftable'", "ItemSymVtr" } ,
+            { "const ItemInstance::`vftable'", "ItemInstanceSymVtr" } ,
+            { "const ItemStack::`vftable'", "ItemStackSymVtr" } ,
+            { "const ItemStackBase::`vftable'", "ItemStackBaseSymVtr" } ,
+            { "const ILevel::`vftable'", "ILevelSymVtr" },
+            { "const ServerLevel::`vftable'{for `ILevel'}", "ServerLevelForILevelSymVtr" },
+            { "const Level::`vftable'{for `ILevel'}", "LevelForILevelSymVtr" }
+        };
 
-        var ddb = new DB(new Options { CreateIfMissing = true }, "C:\\Users\\CNGEGE\\Desktop\\ddb");
-        ddb.Put("li", "si");
-        string v = ddb.Get("zhang");
-        Console.WriteLine($"{v}");
+        // 首先判断数据库存不存在
+        if (!File.Exists(LevelDBPath + "\\LOG"))
+        {
+            Console.WriteLine("没有设置 数据库位置，或没有创建数据库");
+            continue;
+        }
+
+        if(BDSPid == 0)
+        {
+            Console.WriteLine("必须打开BDS， 且中途不可关闭,否则会出现意料之外的错误");
+            continue;
+        }
+
+        Console.WriteLine("请输入保存目录(No /)：");
+        string? savedir = Console.ReadLine();
+        if (savedir == null) continue;
+        if (!File.Exists(savedir))
+        {
+            Directory.CreateDirectory(savedir);
+        }
+
+        Console.WriteLine("请输入 bedrock_server的PDB符号.txt 文件的位置");
+        string? bedpdb = Console.ReadLine();
+        if (bedpdb == null) continue;
+        if (!File.Exists(bedpdb))
+        {
+            Console.WriteLine("文件不存在");
+            continue;
+        }
+
+        string[] bedpdbfile = File.ReadAllLines(bedpdb);
+
+        // 打开数据库
+        var db = new DB(new Options(), LevelDBPath);
+
+        for(int i = 0; i < bedpdbfile.Length; i++)
+        {
+            for(int j = 0; j < preset.GetLength(0); j++)
+            {
+                if (bedpdbfile[i].EndsWith(preset[j,0]))
+                {
+                    Console.WriteLine($"正在处理: {preset[j, 0]}, 准备生成: {preset[j, 1]}.txt");
+                    var add = bedpdbfile[i + 1][2..10];
+
+                    FindVTF(db, add, savedir + "\\" + preset[j, 1] + ".txt");
+                    break;
+                }
+            }
+            
+        }
+
+        // 关闭数据库
+        db.Close();
+        GC.Collect();
+
+        // 首先从 bedrock_server的PDB符号.txt 中读取所有的虚表相关的量
+        // 然后存到一个变量里
     }
-
 }
 Console.Write("回车关闭程序.");
 Console.ReadLine();
 
+
+
+void FindVTF(DB db, string address, string savefile)
+{
+    // 覆盖
+    if (File.Exists(savefile))
+    {
+        File.Create(savefile).Close();
+    }
+    // Write File 
+    string filetext = "";
+    //BDSMoudleBaseAddress
+
+    // 取虚表位置
+    var offset = StringToIntOrZeroHex(address);
+    var ClassVTAddress = (IntPtr)((long)BDSMoudleBaseAddress + offset);
+
+
+    for (int i=0;i< maxcount; i++)
+    {
+        var callAddress = Address.ReadValue_IntPtr64(ClassVTAddress, BDSPid, i * 8);
+
+        // 计算出该虚表函数的的相对基址偏移
+        var offsetAddress = callAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64();
+
+        string offsize = offsetAddress.ToString("X8");
+
+        if (callAddress.ToInt64() % 16 != 0)
+            break;
+        if (offsetAddress > 0xF0000000)
+            break;
+
+        filetext += String.Format("/* VTNum {0} {1} */\n", i,  BDSMoudle + "+" + offsize);
+
+        //if (bdsymdb.TryGet(ReadOptions.Default,"0x"+ offsize, out Slice val))
+        string val = db.Get("0x" + offsize);
+        filetext += val;
+        filetext += "\n";
+
+        if (filetext.Length > 10000)
+        {
+            File.AppendAllText(savefile, filetext);
+            filetext = "";
+        }
+    }
+
+    File.AppendAllText(savefile, filetext);
+    Console.WriteLine("文件保存完成：{0}", savefile);
+}
 
 
 int? Menu()
@@ -519,15 +636,24 @@ int? Menu()
     Console.WriteLine("0. 退出");
     Console.WriteLine("1. Print Info");
     Console.WriteLine("2. 选择BDS符号文件位置，并生成SymDB数据库,请先设置SymDB数据库位置");
+
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("3. 选择SymDB数据库位置(不包含\\)");
+    Console.ForegroundColor = ConsoleColor.Green;
+
     Console.WriteLine("4. 设置 MCWin10 中要查询虚表的类地址/虚表地址（比如Player类");
     Console.WriteLine("5. 设置 BDS     中要查询虚表的虚表地址（比如Player类");
+
+    Console.ForegroundColor = ConsoleColor.Gray;
     Console.WriteLine("6. 清除 MCWin10 中要查询虚表的类地址/虚表地址");
     Console.WriteLine("7. 清除 BDS     中要查询虚表的虚表地址");
+    Console.ForegroundColor = ConsoleColor.Green;
+
     Console.WriteLine("8. 在Win10版中查询方法地址在虚表中的位置");
     Console.WriteLine("9. 在BDS版中查询方法地址在虚表中的位置");
     Console.WriteLine("10. 根据类地址依次获取对应虚函数的地址");
     Console.WriteLine("11. 根据类地址依次获取对应虚函数的地址保存在桌面文件中");
+    Console.WriteLine("12. 生成预制的虚表文件");
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.Write("输入一个序号选择你要使用的功能 > ");
     Console.ForegroundColor = ConsoleColor.Green;
