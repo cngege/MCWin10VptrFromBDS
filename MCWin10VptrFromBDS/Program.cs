@@ -96,7 +96,8 @@ while (true)
             {
                 string[] bdsym = Array.Empty<string>();
                 Console.WriteLine("开始生成数据库 => {0}", LevelDBPath);
-                var db = DB.Open(LevelDBPath, new Options { CreateIfMissing = true });
+                //var db = DB.Open(LevelDBPath, new Options { CreateIfMissing = true });
+                var db = new DB(new Options { CreateIfMissing = true }, LevelDBPath);
                 Console.WriteLine("读取&分割符号文件中……");
                 bdsym = File.ReadAllLines(BDSSymPath);
 
@@ -115,8 +116,9 @@ while (true)
                             Console.WriteLine("正在处理第 {0} 行", i.ToString());
                             //读取key
                             //优化 将有多处符号的地址存在内存中 最后统一写入
-                            var sucess = db.TryGet(ReadOptions.Default, key, out Slice val);
-                            if (sucess)
+                            //var sucess = db.TryGet(ReadOptions.Default, key, out Slice val);
+                            string val = db.Get(key);
+                            if (val != null)
                             {
                                 //WriteVal = val.ToString() + WriteVal;
                                 //db.Put(WOptions, key, WriteVal);
@@ -131,7 +133,8 @@ while (true)
                             }
                             else
                             {
-                                db.Put(WOptions, key, WriteVal);
+                                db.Put(key, WriteVal, WOptions);
+                                //db.Put(WOptions, key, WriteVal);
                             }
                         }
                         catch
@@ -146,7 +149,8 @@ while (true)
                 foreach(KeyValuePair<string,string> kv in syms){
                     try
                     {
-                        db.Put(WOptions, kv.Key, kv.Value);
+                        db.Put(kv.Key, kv.Value, WOptions);
+                        //db.Put(WOptions, kv.Key, kv.Value);
                     }
                     catch
                     {
@@ -188,11 +192,18 @@ while (true)
         var oldaddr = MCWin10ClassVTAddress;
         if (addr_str?.Length >= 1 && addr_str[0] == '+')
         {
-            //输入的地址以+开头 则表示该地址是 指向虚表的偏移
-            addr_str = addr_str.Replace("+", null);
-            var offset = StringToIntOrZeroHex(addr_str);
-            MCWin10ClassVTAddress = (IntPtr)((long)MCWin10MoudleBaseAddress + offset);
-            Console.WriteLine("{0}+0x{1} ==> 0x{2}", MCWin10Moudle, offset?.ToString("X8"), MCWin10ClassVTAddress.ToString("X16"));
+            if (addr_str.Length > 1)
+            {
+                //输入的地址以+开头 则表示该地址是 指向虚表的偏移
+                addr_str = addr_str.Replace("+", null);
+                var offset = StringToIntOrZeroHex(addr_str);
+                MCWin10ClassVTAddress = (IntPtr)((long)MCWin10MoudleBaseAddress + offset);
+                Console.WriteLine("{0}+0x{1} ==> 0x{2}", MCWin10Moudle, offset?.ToString("X8"), MCWin10ClassVTAddress.ToString("X16"));
+            }
+            else // =1
+            {
+                Console.WriteLine($"{addr_str} 非法");
+            }
         }
         else
         {
@@ -220,11 +231,19 @@ while (true)
 
         if (addr_str?.Length >= 1 && addr_str[0] == '+')
         {
-            //输入的地址以+开头 则表示该地址是 指向虚表的偏移
-            addr_str = addr_str.Replace("+", null);
-            var offset = StringToIntOrZeroHex(addr_str);
-            BDSClassVTAddress = (IntPtr)((long)BDSMoudleBaseAddress + offset);
-            Console.WriteLine("{0}+0x{1} ==> 0x{2}", BDSMoudle, offset?.ToString("X8"), BDSClassVTAddress.ToString("X16"));
+            if(addr_str.Length > 1)
+            {
+                //输入的地址以+开头 则表示该地址是 指向虚表的偏移
+                addr_str = addr_str.Replace("+", null);
+                var offset = StringToIntOrZeroHex(addr_str);
+                BDSClassVTAddress = (IntPtr)((long)BDSMoudleBaseAddress + offset);
+                Console.WriteLine("{0}+0x{1} ==> 0x{2}", BDSMoudle, offset?.ToString("X8"), BDSClassVTAddress.ToString("X16"));
+            }
+            else // =1
+            {
+                Console.WriteLine($"{addr_str} 非法");
+            }
+
         }
         else
         {
@@ -398,8 +417,8 @@ while (true)
         //    bdsym = File.ReadAllLines(BDSSymPath);
         //    hasbdsym = true;
         //}
-        var bdsymdb = DB.Open(LevelDBPath, Options.Default);
-
+        //var bdsymdb = DB.Open(LevelDBPath, Options.Default);
+        var bdsymdb = new DB(new Options { }, LevelDBPath);
         for (int i = 0; i < maxcount; i++)
         {
             var MCWin10callAddress = IntPtr.Zero;
@@ -427,7 +446,9 @@ while (true)
                 string offsize = (BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64()).ToString("X8");
                 filetext += String.Format("{0} 虚函数: {1},偏移: {2}\n", "BDS", BDScallAddress.ToString("X16"), BDSMoudle + "+" + offsize);
 
-                if (bdsymdb.TryGet(ReadOptions.Default,"0x"+ offsize, out Slice val))
+                //if (bdsymdb.TryGet(ReadOptions.Default,"0x"+ offsize, out Slice val))
+                string val = bdsymdb.Get("0x" + offsize);
+                if (val != null)
                 {
                     //for (int ii = 0; ii < bdsym.Length; ii++)
                     //{
@@ -449,17 +470,24 @@ while (true)
 
             }
             filetext += String.Format("\n");
-            if (MCWin10ClassVTAddress == IntPtr.Zero || BDSClassVTAddress == IntPtr.Zero)
+            if (MCWin10ClassVTAddress == IntPtr.Zero && BDSClassVTAddress == IntPtr.Zero)
             {
                 break;
             }
-            if (MCWin10callAddress.ToInt64() % 16 != 0 || BDScallAddress.ToInt64() % 16 != 0)
+            if(MCWin10ClassVTAddress != IntPtr.Zero)
             {
-                break;
+                if(MCWin10callAddress.ToInt64() % 16 != 0)
+                    break;
+                if (MCWin10callAddress.ToInt64() - MCWin10MoudleBaseAddress.ToInt64() > 0xF0000000)
+                    break;
             }
-            if (MCWin10callAddress.ToInt64() - MCWin10MoudleBaseAddress.ToInt64() > 0xF0000000 || BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64() > 0xF0000000)
+
+            if (BDSClassVTAddress != IntPtr.Zero)
             {
-                break;
+                if(BDScallAddress.ToInt64() % 16 != 0)
+                    break;
+                if(BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64() > 0xF0000000)
+                    break;
             }
         }
         bdsymdb.Dispose();
@@ -467,7 +495,15 @@ while (true)
         Console.WriteLine("文件保存完成：{0}",String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")));
 
     }
+    if (menu_select == 12)
+    {
+        Console.WriteLine("DEBUG ");
 
+        var ddb = new DB(new Options { CreateIfMissing = true }, "C:\\Users\\CNGEGE\\Desktop\\ddb");
+        ddb.Put("li", "si");
+        string v = ddb.Get("zhang");
+        Console.WriteLine($"{v}");
+    }
 
 }
 Console.Write("回车关闭程序.");
@@ -498,7 +534,7 @@ int? Menu()
 
     Console.ForegroundColor = consoleColor;
     var ret = StringToIntOrZero(Console.ReadLine());
-    if (ret > 11)
+    if (ret > 12)
     {
         ret = 0;
     }
