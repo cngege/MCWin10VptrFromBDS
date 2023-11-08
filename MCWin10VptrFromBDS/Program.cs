@@ -31,8 +31,6 @@ string? BDSSymPath = null;
 string? LevelDBPath = null;
 #endif
 
-
-
 //提示输入
 //0. 退出
 //1. Print Info  //打印所有存储的信息
@@ -498,21 +496,30 @@ while (true)
     if (menu_select == 12)          // 生成预设的虚表文件
     {
         string[,] preset = new string[,] {
-            { "const Mob::`vftable'", "MobSymVtr" },
-            { "const ItemActor::`vftable'", "ItemActorSymVtr" } ,
-            { "const Actor::`vftable'", "ActorSymVtr" } ,
-            { "const SimulatedPlayer::`vftable'", "SimulatedPlayerSymVtr" } ,
-            { "const ServerPlayer::`vftable'", "ServerPlayerSymVtr" } ,
-            { "const Player::`vftable'", "PlayerSymVtr" } ,
-            { "const FishingHook::`vftable'", "FishingHookSymVtr" } ,
-            { "const GameMode::`vftable'", "GameModeSymVtr" } ,
-            { "const Item::`vftable'", "ItemSymVtr" } ,
-            { "const ItemInstance::`vftable'", "ItemInstanceSymVtr" } ,
-            { "const ItemStack::`vftable'", "ItemStackSymVtr" } ,
-            { "const ItemStackBase::`vftable'", "ItemStackBaseSymVtr" } ,
-            { "const ILevel::`vftable'", "ILevelSymVtr" },
-            { "const ServerLevel::`vftable'{for `ILevel'}", "ServerLevelForILevelSymVtr" },
-            { "const Level::`vftable'{for `ILevel'}", "LevelForILevelSymVtr" }
+            { "const Mob::`vftable'", "MobSymVtr", "Mob" },
+            { "const ItemActor::`vftable'", "ItemActorSymVtr","ItemActor" } ,
+            { "const Actor::`vftable'", "ActorSymVtr" , "Actor"} ,
+            { "const SimulatedPlayer::`vftable'", "SimulatedPlayerSymVtr", "SimulatedPlayer" } ,
+            { "const ServerPlayer::`vftable'", "ServerPlayerSymVtr", "ServerPlayer" } ,
+            { "const Player::`vftable'", "PlayerSymVtr", "Player" } ,
+            { "const FishingHook::`vftable'", "FishingHookSymVtr", "FishingHook" } ,
+            { "const GameMode::`vftable'", "GameModeSymVtr" ,"GameMode" } ,
+            { "const Item::`vftable'", "ItemSymVtr", "Item" } ,
+            { "const ItemInstance::`vftable'", "ItemInstanceSymVtr" , "ItemInstance"} ,
+            { "const ItemStack::`vftable'", "ItemStackSymVtr" , "ItemStack"} ,
+            { "const ItemStackBase::`vftable'", "ItemStackBaseSymVtr" , "ItemStackBase"} ,
+            { "const ILevel::`vftable'", "ILevelSymVtr", "" },
+            { "const ServerLevel::`vftable'{for `ILevel'}", "ServerLevelForILevelSymVtr" ,"ServerLevel" },
+            { "const Level::`vftable'{for `ILevel'}", "LevelForILevelSymVtr" ,"Level" },
+            { "const Block::`vftable'", "BlockSymVtr", "" },
+            { "const BlockLegacy::`vftable'", "BlockLegacySymVtr" , "BlockLegacy" },
+            { "const LoopbackPacketSender::`vftable'", "LoopbackPacketSenderSymVtr", "LoopbackPacketSender" },
+            { "const BlockSource::`vftable'", "BlockSourceSymVtr", "BlockSource" },
+            { "const Dimension::`vftable'{for `IDimension'}", "DimensionSymVtr", "Dimension" },
+            { "const OverworldDimension::`vftable'{for `IDimension'}", "OverworldDimensionSymVtr", "OverworldDimension" },
+            { "const NetherDimension::`vftable'{for `IDimension'}", "NetherDimensionSymVtr", "NetherDimension" },
+            { "const TheEndDimension::`vftable'{for `IDimension'}", "TheEndDimensionSymVtr", "TheEndDimension" },
+            { "const DirectActorMovementProxy::`vftable'{for `IActorMovementProxy'}", "ActorMovementProxySymVtr", "" }  // 1.20.40 开始没有此类
         };
 
         // 首先判断数据库存不存在
@@ -537,8 +544,23 @@ while (true)
         }
 
         Console.WriteLine("请输入 bedrock_server的PDB符号.txt 文件的位置");
+        if (File.Exists(BDSSymPath))
+        {
+            Console.WriteLine("(直接回车使用已设置文件)oldfile = {0}", BDSSymPath);
+        }
         string? bedpdb = Console.ReadLine();
-        if (bedpdb == null) continue;
+        if (String.IsNullOrEmpty(bedpdb))
+        {
+            bedpdb = BDSSymPath;
+            if (!File.Exists(BDSSymPath))
+            {
+                continue;
+            }
+            else
+            {
+                bedpdb = BDSSymPath;
+            }
+        }
         if (!File.Exists(bedpdb))
         {
             Console.WriteLine("文件不存在");
@@ -559,7 +581,7 @@ while (true)
                     Console.WriteLine($"正在处理: {preset[j, 0]}, 准备生成: {preset[j, 1]}.txt");
                     var add = bedpdbfile[i + 1][2..10];
 
-                    FindVTF(db, add, savedir + "\\" + preset[j, 1] + ".txt");
+                    FindVTF(db, add, savedir + "\\" + preset[j, 1] + ".txt", preset[j, 2]);
                     break;
                 }
             }
@@ -579,13 +601,44 @@ Console.ReadLine();
 
 
 
-void FindVTF(DB db, string address, string savefile)
+bool FilterClassFun(string sFuns, string classname,out string writefun)
+{
+    writefun = string.Empty;
+    if (classname == "") return false;
+
+    // 首先按换行分割
+    if(sFuns.IndexOf("\n") == -1) return false;
+    string[] dataline = sFuns.Split('\n');
+
+    // 然后轮询每一行查找符合函数
+    foreach (string line in dataline)
+    {
+        if (line.IndexOf(" ") == -1) continue;
+        string[] item = line.Split(' ');
+        // item2 就是其中的每一个单词
+        foreach (string item2 in item)
+        {
+            // 看看这个单词是否是 classname+::开头
+            if (item2.StartsWith(classname + "::"))
+            {
+                writefun += line + "\n";
+                break;
+            }
+        }
+    }
+
+    return writefun != string.Empty;
+
+}
+
+void FindVTF(DB db, string address, string savefile, string classname)
 {
     // 覆盖
     if (File.Exists(savefile))
     {
-        File.Create(savefile).Close();
+        return;
     }
+    File.Create(savefile).Close();
     // Write File 
     string filetext = "";
     //BDSMoudleBaseAddress
@@ -613,7 +666,47 @@ void FindVTF(DB db, string address, string savefile)
 
         //if (bdsymdb.TryGet(ReadOptions.Default,"0x"+ offsize, out Slice val))
         string val = db.Get("0x" + offsize);
-        filetext += val;
+        // 这里判断是否是多行
+        if(val!=null && System.Text.RegularExpressions.Regex.Matches(val, "\n").Count > 5)
+        {
+            //filetext += String.Format("// 0x{0} \n", offsize);
+            //filetext += String.Format("__unknowfunction_{0}_\n", offsize);
+            //var filepath = Directory.GetParent(savefile) + "\\unknowVTF\\";
+            //if(!Directory.Exists(filepath)) {
+            //    Directory.CreateDirectory(filepath);
+            //}
+            //if(!File.Exists(filepath + offsize + ".txt"))
+            //{
+            //    File.AppendAllText(filepath + offsize + ".txt", val);
+            //}
+            filetext += String.Format("// 0x{0} \n", offsize);
+            if(FilterClassFun(val, classname, out string writeFun))
+            {
+                filetext += String.Format("//[同函数多名]_{0}_\n", offsize);
+                filetext += writeFun;
+            }
+            else
+            {
+                filetext += String.Format("__unknowfunction_{0}_\n", offsize);
+            }
+
+            var filepath = Directory.GetParent(savefile) + "\\unknowVTF\\";
+            if (!Directory.Exists(filepath))
+            {
+                Directory.CreateDirectory(filepath);
+            }
+            if (!File.Exists(filepath + offsize + ".txt"))
+            {
+                File.AppendAllText(filepath + offsize + ".txt", val);
+            }
+
+            //FilterClassFun
+        }
+        else
+        {
+            filetext += val?[11..];
+        }
+        
         filetext += "\n";
 
         if (filetext.Length > 10000)
