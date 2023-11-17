@@ -416,7 +416,11 @@ while (true)
         //    hasbdsym = true;
         //}
         //var bdsymdb = DB.Open(LevelDBPath, Options.Default);
-        var bdsymdb = new DB(new Options { }, LevelDBPath);
+        DB? bdsymdb = null;
+        if (BDSVptr != IntPtr.Zero)
+        {
+            bdsymdb = new DB(new Options { }, LevelDBPath);
+        }
         for (int i = 0; i < maxcount; i++)
         {
             var MCWin10callAddress = IntPtr.Zero;
@@ -438,7 +442,7 @@ while (true)
                 MCWin10callAddress = Address.ReadValue_IntPtr64(MCWin10Vptr, MCWin10Pid, i * 8);
                 filetext += String.Format("{0} 虚函数: {1},偏移: {2}\n", "MCWin10", MCWin10callAddress.ToString("X16"), MCWin10Moudle + "+" + (MCWin10callAddress.ToInt64() - MCWin10MoudleBaseAddress.ToInt64()).ToString("X8"));
             }
-            if (BDSVptr != IntPtr.Zero)
+            if (BDSVptr != IntPtr.Zero && bdsymdb != null)
             {
                 BDScallAddress = Address.ReadValue_IntPtr64(BDSVptr, BDSPid, i * 8);
                 string offsize = (BDScallAddress.ToInt64() - BDSMoudleBaseAddress.ToInt64()).ToString("X8");
@@ -488,7 +492,7 @@ while (true)
                     break;
             }
         }
-        bdsymdb.Dispose();
+        bdsymdb?.Dispose();
         File.AppendAllText(String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")), filetext);
         Console.WriteLine("文件保存完成：{0}",String.Format("C:/Users/{0}/Desktop/symVptr.txt", Environment.GetEnvironmentVariable("username")));
 
