@@ -523,6 +523,12 @@ while (true)
             { "const OverworldDimension::`vftable'{for `IDimension'}", "OverworldDimensionSymVtr", "OverworldDimension" },
             { "const NetherDimension::`vftable'{for `IDimension'}", "NetherDimensionSymVtr", "NetherDimension" },
             { "const TheEndDimension::`vftable'{for `IDimension'}", "TheEndDimensionSymVtr", "TheEndDimension" },
+            { "const Packet::`vftable'", "PacketSymVtr", "Packet" },
+            { "const PlayerInputPacket::`vftable'", "PlayerInputPacketSymVtr", "PlayerInputPacket" },
+            { "const TransferPacket::`vftable'", "TransferPacketSymVtr", "TransferPacket" },
+            { "const MovePlayerPacket::`vftable'", "MovePlayerPacketSymVtr", "MovePlayerPacket" },
+            { "const PlayerAuthInputPacket::`vftable'", "PlayerAuthInputPacketSymVtr", "PlayerAuthInputPacket" },
+            { "const PositionTrackingDBServerBroadcastPacket::`vftable'", "PositionTrackingDBServerBroadcastPacketSymVtr", "PositionTrackingDBServerBroadcastPacket" },
             { "const DirectActorMovementProxy::`vftable'{for `IActorMovementProxy'}", "ActorMovementProxySymVtr", "" }  // 1.20.40 开始没有此类
         };
 
